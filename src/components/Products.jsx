@@ -11,7 +11,7 @@ import light8 from '../assets/product_images/light8.png';
 import light9 from '../assets/product_images/light9.png';
 import light10 from '../assets/product_images/light10.png';
 
-import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 const Products = ({ products, setProducts }) => {
@@ -132,18 +132,16 @@ const Products = ({ products, setProducts }) => {
         try {
             alert("Starting seeding... please wait.");
             const promises = initialProducts.map(async (item) => {
-                // Fetch the image from the local URL
                 const response = await fetch(item.image);
                 const blob = await response.blob();
 
-                // Convert to Base64
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onloadend = async () => {
                         const base64data = reader.result;
                         await addDoc(collection(db, "products"), {
                             name: item.name,
-                            qty: String(item.qty), // Keeping as string to match previous pattern if needed, or int. App used string '20'.
+                            qty: Number(item.qty), // Changed to Number
                             image: base64data
                         });
                         resolve();
@@ -175,6 +173,34 @@ const Products = ({ products, setProducts }) => {
         } catch (error) {
             console.error("Error clearing database:", error);
             alert("Error clearing database. Check console.");
+        }
+    };
+
+    // Temporary migration function to fix existing string Qty in DB
+    const migrateQtyToNumber = async () => {
+        if (!confirm("This will scan all products and convert string 'qty' to numbers. Continue?")) return;
+
+        try {
+            console.log("Starting migration...");
+            let updatedCount = 0;
+            const updates = products.map(async (product) => {
+                // If it's a string, try to parse it. 
+                // Note: typeof product.qty might be 'number' from firebase if already fixed, but let's check.
+                if (typeof product.qty === 'string') {
+                    const numQty = parseInt(product.qty, 10);
+                    if (!isNaN(numQty)) {
+                        await updateDoc(doc(db, "products", product.id), {
+                            qty: numQty
+                        });
+                        updatedCount++;
+                    }
+                }
+            });
+            await Promise.all(updates);
+            alert(`Migration complete! Updated ${updatedCount} products.`);
+        } catch (e) {
+            console.error(e);
+            alert("Error running migration.");
         }
     };
 
@@ -261,6 +287,9 @@ const Products = ({ products, setProducts }) => {
                     )}
                 </div>
 
+                <button style={{ ...styles.addButton, backgroundColor: '#666', marginRight: '10px' }} onClick={migrateQtyToNumber}>
+                    <span style={styles.addButtonText}>Fix Data</span>
+                </button>
                 <button style={styles.addButton} onClick={() => setIsPopupOpen(true)}>
                     <Plus size={18} color="white" />
                     <span style={styles.addButtonText}>Add Products</span>
