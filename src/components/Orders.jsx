@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Search, Plus, User, ArrowLeft, X, Minus } from 'lucide-react';
+import { Search, Plus, User, ArrowLeft, X, Minus, Trash2 } from 'lucide-react';
 
-import { collection, addDoc, updateDoc, doc, increment } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, increment } from "firebase/firestore";
 import { db } from "../firebase";
 
 const Orders = ({ orders, setOrders, products, setProducts }) => {
@@ -162,12 +162,12 @@ const Orders = ({ orders, setOrders, products, setProducts }) => {
             const stockChanges = {};
             originalItems.forEach(item => {
                 if (item.productId) {
-                    stockChanges[item.productId] = (stockChanges[item.productId] || 0) - parseInt(item.qty);
+                    stockChanges[item.productId] = (stockChanges[item.productId] || 0) + parseInt(item.qty); // Add back original
                 }
             });
             editOrderItems.forEach(item => {
                 if (item.productId) {
-                    stockChanges[item.productId] = (stockChanges[item.productId] || 0) + parseInt(item.qty);
+                    stockChanges[item.productId] = (stockChanges[item.productId] || 0) - parseInt(item.qty); // Deduct new
                 }
             });
 
@@ -176,7 +176,7 @@ const Orders = ({ orders, setOrders, products, setProducts }) => {
                     const prod = products.find(p => p.id === pid);
                     if (prod) {
                         const currentQty = parseInt(prod.qty);
-                        const newQty = Math.max(0, currentQty - change).toString();
+                        const newQty = Math.max(0, currentQty + change).toString(); // Correct logic: Current + (Old - New)
                         await updateDoc(doc(db, "products", pid), { qty: newQty });
                     }
                 }
@@ -188,6 +188,30 @@ const Orders = ({ orders, setOrders, products, setProducts }) => {
         } catch (e) {
             console.error("Error updating order: ", e);
             alert("Error updating order");
+        }
+    };
+
+    const handleDeleteOrder = async (order) => {
+        if (!confirm(`Are you sure you want to delete the order for ${order.customer}?`)) return;
+
+        try {
+            // Restore stock if the order wasn't completed (meaning items are still 'out')
+            if (order.status !== 'Done' && order.items) {
+                for (const item of order.items) {
+                    if (item.productId && item.qty > 0) {
+                        const product = products.find(p => p.id === item.productId);
+                        if (product) {
+                            const newQty = (parseInt(product.qty) + parseInt(item.qty)).toString();
+                            await updateDoc(doc(db, "products", item.productId), { qty: newQty });
+                        }
+                    }
+                }
+            }
+
+            await deleteDoc(doc(db, "orders", order.id));
+        } catch (e) {
+            console.error("Error deleting order:", e);
+            alert("Error deleting order");
         }
     };
 
@@ -411,7 +435,7 @@ const Orders = ({ orders, setOrders, products, setProducts }) => {
                                 )}
                             </td>
 
-                            <td style={{ textAlign: 'right' }}>
+                            <td style={{ textAlign: 'center', display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingRight: '15px' }}>
                                 <button
                                     className="btn-view"
                                     onClick={() => handleEditClick(order)}
@@ -422,6 +446,22 @@ const Orders = ({ orders, setOrders, products, setProducts }) => {
                                     }}
                                 >
                                     Edit
+                                </button>
+                                <button
+                                    className="btn-view"
+                                    onClick={() => handleDeleteOrder(order)}
+                                    style={{
+                                        backgroundColor: '#ff4444',
+                                        color: 'white',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '8px',
+                                        minWidth: 'auto'
+                                    }}
+                                    title="Delete Order"
+                                >
+                                    <Trash2 size={16} />
                                 </button>
                             </td>
                         </tr>
