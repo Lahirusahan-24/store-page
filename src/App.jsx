@@ -23,11 +23,7 @@ import light9 from './assets/product_images/light9.png';
 import light10 from './assets/product_images/light10.png';
 
 function App() {
-  /* 
-  // Initial Mock Data (Commented out as we are now using Firebase)
-  const [orders, setOrders] = useState([...]);
-  const [products, setProducts] = useState([...]);
-  */
+
 
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
